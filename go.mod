@@ -5,7 +5,6 @@ go 1.25.0
 require (
 	dubbo.apache.org/dubbo-go/v3 v3.3.2-20260419
 	github.com/nacos-group/nacos-sdk-go/v2 v2.2.7
-	github.com/wxsimon2022/nacoswrap v0.0.0-20260613143240-5d7f905457a3
 )
 
 require (

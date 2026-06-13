@@ -1,15 +1,17 @@
 # dubboconn
 
-> Zero-boilerplate Dubbo consumer for Go — discover providers via Nacos, create a proxy, call methods.
+> One package for Nacos service discovery + Dubbo consumer connectivity in Go.
 
-Combines [nacoswrap](https://github.com/wxsimon2022/nacoswrap) (Nacos service discovery) with the dubbo-go consumer into a single `Connect` call. No manual Nacos queries, no hard-coded provider URLs, no boilerplate.
+Combines Nacos client (service discovery, config management) with dubbo-go consumer
+proxy creation — no separate packages needed.
 
 ## Features
 
-- **One call** — Nacos discovery + dubbo-go proxy in a single `Connect`
-- **No boilerplate** — just define your interface as a Go struct and call methods
-- **Provider change notification** — `Watch()` for Nacos instance changes
-- **Probe timeout** — optional connection readiness check
+- **NewNacos()** — standalone Nacos client (discovery + config)
+- **Connect()** — discover Dubbo provider via Nacos, create consumer proxy
+- **Watch()** — subscribe to provider changes
+- **GetConfig / ListenConfig** — Nacos configuration management
+- No external Nacos wrapper dependency — everything in one package
 
 ## Installation
 
@@ -17,92 +19,61 @@ Combines [nacoswrap](https://github.com/wxsimon2022/nacoswrap) (Nacos service di
 go get github.com/wxsimon2022/dubboconn
 ```
 
-## Quick Start
+## Usage
 
-### 1. Define your Dubbo service interface
+### Dubbo — Discover & Connect
 
 ```go
 type Greeter struct {
-    SayHello   func(ctx context.Context, name string) (string, error)
-    SayGoodBye func(ctx context.Context, name string) (string, error)
+    SayHello func(ctx context.Context, name string) (string, error)
 }
-```
 
-The struct fields must be function types matching your Dubbo Java interface methods.
-
-### 2. Connect
-
-```go
 var svc Greeter
-
 _, err := dubboconn.Connect(dubboconn.Config{
-    // Nacos
     NacosHost:     "127.0.0.1",
     NacosPort:     8848,
-    NacosNamespace: "public",
-
-    // Dubbo service to discover
     ServiceName:   "providers:org.apache.dubbo.demo.Greeter::",
     InterfaceName: "org.apache.dubbo.demo.Greeter",
 }, &svc)
-if err != nil {
-    log.Fatal(err)
-}
+// svc.SayHello(ctx, "world") works now
 ```
 
-### 3. Call methods
+### Nacos — Standalone Client
 
 ```go
-resp, err := svc.SayHello(context.Background(), "world")
-if err != nil {
-    log.Printf("RPC failed: %v", err)
-}
-fmt.Println(resp)
-```
-
-### 4. (Optional) Watch for provider changes
-
-```go
-conn.Watch(func(newURL string) {
-    log.Printf("Provider changed to: %s", newURL)
+client, err := dubboconn.NewNacos(dubboconn.NacosConfig{
+    Host: "127.0.0.1",
+    Port: 8848,
 })
+
+instances, _ := client.GetInstances("my-service")
+client.Watch("my-service", func(instances []model.Instance) { ... })
+
+val, _ := client.GetConfig("app.yml", dubboconn.WithGroup("APP"))
+client.ListenConfig("app.yml", func(v string) { ... })
 ```
 
-## Config Reference
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| NacosHost | — (required) | Nacos server address |
-| NacosPort | 8848 | Nacos server port |
-| NacosNamespace | "public" | Nacos namespace |
-| NacosUsername | — | Nacos auth username |
-| NacosPassword | — | Nacos auth password |
-| ServiceName | — (required) | Nacos service name |
-| InterfaceName | — (required) | Dubbo interface name |
-| Protocol | "tri" | Protocol (triple) |
-| Retries | "2" | RPC retry count |
-| RequestTimeout | "30s" | RPC timeout |
-| Serialization | "hessian2" | Serialization format |
-| ProbeTimeout | 0 (skip) | Connection probe timeout |
-
-## How It Works
+## API Overview
 
 ```
-You call Connect(cfg, &svc)
-  │
-  ├─ 1. nacoswrap.NewClient()        → connect to Nacos
-  ├─ 2. client.GetInstances(name)    → discover provider IP:port
-  ├─ 3. dubboCfg.ReferenceConfig{...} → create consumer proxy
-  └─ 4. ref.Refer() + ref.Implement() → populate struct function fields
-                                         ↓
-                               svc.SayHello() → works immediately
+NewNacos(cfg NacosConfig) → *Client, error
+  ├─ GetInstances(name, opts...) → []model.Instance, error
+  ├─ Watch(name, onChange) → error
+  ├─ Unwatch(name) → error
+  ├─ RegisterInstance / DeregisterInstance
+  ├─ GetConfig / PublishConfig / DeleteConfig
+  └─ ListenConfig / CancelListenConfig
+
+Connect(cfg Config, svc) → *Connection, error
+  └─ Connection.Watch(onChanged) → error
+  └─ Connection.Unwatch() → error
+  └─ Connection.CurrentURL() → string
 ```
 
 ## Requirements
 
 - Go 1.23+
-- A running Nacos server with registered Dubbo providers
-- dubbo-go v3 (Triple protocol)
+- Nacos server with registered Dubbo providers
 
 ## License
 
