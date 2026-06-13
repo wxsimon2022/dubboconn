@@ -73,9 +73,6 @@ func (c *Config) setDefaults() {
 	if c.Serialization == "" {
 		c.Serialization = "hessian2"
 	}
-	if c.NacosAppName == "" {
-		c.NacosAppName = c.InterfaceName
-	}
 }
 
 // Connection holds the established Nacos client and Dubbo proxy reference.
