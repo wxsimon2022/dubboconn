@@ -1,0 +1,5 @@
+# Nacos SDK cache
+nacos/
+
+# Dubbo-go logs
+dubbo-go.log
